@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment with 3D Secure</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        :root {
+            --primary-color: #6772e5;
+            --primary-hover: #5469d4;
+            --light-gray: #f4f6f8;
+            --border-color: #e0e0e0;
+            --error-color: #df1b41;
+            --success-color: #00a67e;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-gray);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 480px;
+            width: 100%;
+        }
+
+        .card {
+            background-color: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-top: 0;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+        }
+
+        input[type="number"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(103, 114, 229, 0.2);
+        }
+
+        .payment-element-container {
+            margin-bottom: 24px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background-color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, .3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-message {
+            color: var(--error-color);
+            margin-top: 16px;
+            margin-bottom: 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .success-message {
+            color: var(--success-color);
+            margin-top: 16px;
+            margin-bottom: 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .payment-tab {
+            display: flex;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-item {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            cursor: pointer;
+            color: #333;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .tab-item.active {
+            color: var(--primary-color);
+        }
+
+        .tab-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Secure Payment</h1>
+
+            <div class="payment-tab">
+                <div class="tab-item active" data-tab="card-tab">Card Payment</div>
+                <div class="tab-item" data-tab="checkout-tab">Stripe Checkout</div>
+            </div>
+
+            <!-- Card Payment Tab (PaymentIntent with 3DS) -->
+            <div id="card-tab" class="tab-content active">
+                <form id="payment-form">
+                    <div class="input-group">
+                        <label for="amount">Amount (in INR)</label>
+                        <input type="number" id="amount" name="amount" value="10000" min="1" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="currency">Currency</label>
+                        <select id="currency" name="currency" required>
+                            <option value="usd">USD - US Dollar</option>
+                            <option value="eur">EUR - Euro</option>
+                            <option value="gbp">GBP - British Pound</option>
+                            <option value="inr">INR - Indian Rupee</option>
+                            <option value="aud">AUD - Australian Dollar</option>
+                            <option value="cad">CAD - Canadian Dollar</option>
+                            <option value="jpy">JPY - Japanese Yen</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="country">Country</label>
+                        <select id="country" name="country" required>
+                            <option value="US">United States</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="IN">India</option>
+                            <option value="DE">Germany</option>
+                            <option value="FR">France</option>
+                            <option value="IT">Italy</option>
+                            <option value="ES">Spain</option>
+                            <option value="CA">Canada</option>
+                            <option value="AU">Australia</option>
+                            <option value="JP">Japan</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="email">Email</label>
+                        <input type="text" id="email" name="email" placeholder="your@email.com" required>
+                    </div>
+
+                    <div class="payment-element-container">
+                        <div id="payment-element"></div>
+                    </div>
+
+                    <button id="submit-button" type="submit">
+                        <span id="button-text">Pay Now</span>
+                        <span id="spinner" class="spinner hidden"></span>
+                    </button>
+
+                    <p id="error-message" class="error-message hidden"></p>
+                    <p id="success-message" class="success-message hidden"></p>
+                </form>
+            </div>
+
+            <!-- Stripe Checkout Tab -->
+            <div id="checkout-tab" class="tab-content">
+                <form id="checkout-form">
+                    <div class="input-group">
+                        <label for="checkout-amount">Amount (in INR)</label>
+                        <input type="number" id="checkout-amount" name="checkout-amount" value="10000" min="1" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="product-name">Product Name</label>
+                        <input type="text" id="product-name" name="product-name" value="Your Product" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="description">Description</label>
+                        <input type="text" id="description" name="description" value="Product description">
+                    </div>
+
+                    <button id="checkout-button" type="submit">
+                        <span>Continue to Checkout</span>
+                    </button>
+
+                    <p id="checkout-error" class="error-message hidden"></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Stripe
+        const stripe = Stripe('pk_test_51PDVunSDRVZldNyWjMxjnCGSqe24bEt6DINCGXfGhwMxZUiHC7ZKYyVRCpk4aKZ2BpVuUCHqDzmQH1FDa4jIHQIh00XE63N137');
+        let elements;
+        let paymentElement;
+
+        // Tab switching
+        document.querySelectorAll('.tab-item').forEach(tab => {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+                this.classList.add('active');
+                document.getElementById(this.getAttribute('data-tab')).classList.add('active');
+            });
+        });
+
+        // Initialize PaymentElement
+        async function initializePaymentElement() {
+            const amount = document.getElementById('amount').value;
+            const email = document.getElementById('email').value;
+            const currency = document.getElementById('currency').value;
+            const country = document.getElementById('country').value;
+
+            try {
+                const response = await fetch('http://localhost:8080/api/payment/create-payment-intent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: parseInt(amount),
+                        customerEmail: email,
+                        currency: currency,
+                        country: country
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create payment intent');
+                }
+
+                const { clientSecret } = await response.json();
+
+                // If we already have elements, unmount the payment element
+                if (paymentElement) {
+                    paymentElement.unmount();
+                }
+
+                // Create Elements instance
+                elements = stripe.elements({
+                    clientSecret,
+                    appearance: {
+                        theme: 'stripe',
+                        variables: {
+                            colorPrimary: '#6772e5',
+                        }
+                    },
+                    locale: country.toLowerCase()
+                });
+
+                // Create and mount Payment Element
+                paymentElement = elements.create('payment', {
+                    fields: {
+                        billingDetails: {
+                            email: 'auto'
+                        }
+                    }
+                });
+                paymentElement.mount('#payment-element');
+
+                document.getElementById('submit-button').disabled = false;
+                document.getElementById('error-message').classList.add('hidden');
+
+            } catch (error) {
+                console.error('Error initializing payment:', error);
+                document.getElementById('error-message').textContent = error.message;
+                document.getElementById('error-message').classList.remove('hidden');
+                document.getElementById('submit-button').disabled = true;
+            }
+        }
+
+        // Handle Card Payment Form Submission (PaymentIntent with 3DS)
+        document.getElementById('payment-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const submitButton = document.getElementById('submit-button');
+            const spinner = document.getElementById('spinner');
+            const buttonText = document.getElementById('button-text');
+            const errorMessage = document.getElementById('error-message');
+            const successMessage = document.getElementById('success-message');
+
+            // Disable button and show spinner
+            submitButton.disabled = true;
+            spinner.classList.remove('hidden');
+            buttonText.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            try {
+                // Confirm the payment with 3D Secure
+                const { error, paymentIntent } = await stripe.confirmPayment({
+                    elements,
+                    confirmParams: {
+                        return_url: window.location.origin + '/payment-success.html',
+                    },
+                    redirect: 'if_required'
+                });
+
+                if (error) {
+                    throw error;
+                }
+
+                if (paymentIntent && paymentIntent.status === 'succeeded') {
+                    // Payment succeeded without a redirect
+                    successMessage.textContent = 'Payment successful!';
+                    successMessage.classList.remove('hidden');
+
+                    // Reset form
+                    document.getElementById('payment-form').reset();
+                    setTimeout(() => {
+                        initializePaymentElement();
+                    }, 2000);
+                }
+
+            } catch (error) {
+                errorMessage.textContent = error.message || 'An unexpected error occurred';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // Re-enable button and hide spinner
+                submitButton.disabled = false;
+                spinner.classList.add('hidden');
+                buttonText.classList.remove('hidden');
+            }
+        });
+
+        // Handle Stripe Checkout Form Submission
+        document.getElementById('checkout-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const amount = document.getElementById('checkout-amount').value;
+            const productName = document.getElementById('product-name').value;
+            const description = document.getElementById('description').value;
+            const checkoutButton = document.getElementById('checkout-button');
+            const checkoutError = document.getElementById('checkout-error');
+
+            checkoutButton.disabled = true;
+            checkoutError.classList.add('hidden');
+
+            try {
+                const response = await fetch('http://localhost:8080/api/checkout/create-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: parseInt(amount),
+                        productName: productName,
+                        description: description
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create checkout session');
+                }
+
+                const { url } = await response.json();
+
+                // Redirect to Stripe Checkout
+                window.location.href = url;
+
+            } catch (error) {
+                checkoutError.textContent = error.message;
+                checkoutError.classList.remove('hidden');
+                checkoutButton.disabled = false;
+            }
+        });
+
+        // Initialize payment element when amount, email, currency, or country changes
+        document.getElementById('amount').addEventListener('change', initializePaymentElement);
+        document.getElementById('email').addEventListener('change', initializePaymentElement);
+        document.getElementById('currency').addEventListener('change', initializePaymentElement);
+        document.getElementById('country').addEventListener('change', initializePaymentElement);
+
+        // Initialize payment element on page load after a small delay
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                initializePaymentElement();
+            }, 100);
+        });
+    </script>
+</body>
+
+</html>
